@@ -48,9 +48,12 @@ def test_kafka_adapter_returns_version_diff_documents_for_3_8_to_4_1():
     }
     combined = "\n".join(document.content for document in documents)
     assert "Kafka 3.8에서 4.1" in combined
-    assert "major-version upgrade" in combined
+    assert "KRaft" in combined
     assert "ZooKeeper" in combined
-    assert "deprecated" in combined
+    assert "OAuthBearer" in combined
+    assert "Java 17" in combined
+    assert "log.message.format.version" in combined
+    assert "linger.ms" in combined
 
 
 def test_unknown_source_error_lists_available_sources():
