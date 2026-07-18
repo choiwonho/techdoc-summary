@@ -20,9 +20,26 @@ def run(source_id: str, output_dir: Optional[Path] = None) -> list[Path]:
     return _run_one(source_id, output_dir)
 
 
-def _run_one(source_id: str, output_dir: Optional[Path] = None) -> list[Path]:
+def run_version_diff(
+    source_id: str,
+    from_version: str,
+    to_version: str,
+    output_dir: Optional[Path] = None,
+) -> list[Path]:
+    return _run_one(source_id, output_dir, from_version=from_version, to_version=to_version)
+
+
+def _run_one(
+    source_id: str,
+    output_dir: Optional[Path] = None,
+    from_version: Optional[str] = None,
+    to_version: Optional[str] = None,
+) -> list[Path]:
     adapter = get_adapter(source_id)
-    documents = adapter.fetch()
+    if from_version and to_version and hasattr(adapter, "fetch_version_diff"):
+        documents = adapter.fetch_version_diff(from_version, to_version)
+    else:
+        documents = adapter.fetch()
     report = summarize(
         source_id=adapter.source_id,
         display_name=adapter.display_name,
@@ -46,6 +63,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=Path("reports"),
         help="Directory where the Markdown report will be written.",
     )
+    parser.add_argument(
+        "--from-version",
+        help="Source version for a version comparison report. Kafka only.",
+    )
+    parser.add_argument(
+        "--to-version",
+        help="Target version for a version comparison report. Kafka only.",
+    )
     return parser
 
 
@@ -57,7 +82,18 @@ def main(argv: Optional[list[str]] = None) -> int:
         return int(exc.code)
 
     try:
-        paths = run(args.source, args.output_dir)
+        if bool(args.from_version) != bool(args.to_version):
+            print("from-version and to-version must be provided together", file=sys.stderr)
+            return 2
+        if args.from_version and args.to_version:
+            paths = run_version_diff(
+                args.source,
+                args.from_version,
+                args.to_version,
+                args.output_dir,
+            )
+        else:
+            paths = run(args.source, args.output_dir)
     except UnknownSourceError as exc:
         print(str(exc), file=sys.stderr)
         return 2

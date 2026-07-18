@@ -58,7 +58,7 @@ def _section_body(section_id: str, documents: list[SourceDocument]) -> str:
 
     lines: list[str] = []
     for document in documents:
-        lines.append(f"- {document.title}: {document.content} ({document.url})")
+        lines.append(f"- {document.title}: {document.content}")
     return "\n".join(lines)
 
 

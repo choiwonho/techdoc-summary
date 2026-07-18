@@ -40,6 +40,31 @@ def test_summarizer_creates_standard_sections():
     ]
 
 
+def test_summarizer_keeps_links_out_of_section_body():
+    documents = [
+        SourceDocument(
+            title="Upgrade notes",
+            url="https://example.com/upgrade",
+            section="breaking-changes",
+            content="Review removed behavior before upgrading.",
+        ),
+    ]
+
+    report = summarize(
+        source_id="example",
+        display_name="Example",
+        documents=documents,
+        generated_on=date(2026, 7, 12),
+    )
+
+    breaking_changes = next(
+        section for section in report.sections if section.title == "Breaking Changes"
+    )
+    assert "Review removed behavior before upgrading." in breaking_changes.body
+    assert "https://example.com/upgrade" not in breaking_changes.body
+    assert report.source_links == ["https://example.com/upgrade"]
+
+
 def test_summarizer_states_when_section_has_no_content():
     report = summarize(
         source_id="example",
