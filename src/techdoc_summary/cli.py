@@ -74,11 +74,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--from-version",
-        help="Source version for a version comparison report. Kafka only.",
+        help="Source version for a version comparison report.",
     )
     parser.add_argument(
         "--to-version",
-        help="Target version for a version comparison report. Kafka only.",
+        help="Target version for a version comparison report.",
     )
     return parser
 

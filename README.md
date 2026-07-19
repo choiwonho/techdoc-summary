@@ -14,8 +14,9 @@ The MVP supports:
 
 - Elasticsearch
 - Kafka
+- Logstash
 
-The long-term source list includes Logstash, Java, Apache HTTP Server, Tomcat, Kibana, Kubernetes, and Docker.
+The long-term source list includes Java, Apache HTTP Server, Tomcat, Kibana, Kubernetes, and Docker.
 
 Each report focuses on:
 
@@ -80,6 +81,7 @@ Run installed CLI commands:
 techdoc-summary all
 techdoc-summary elasticsearch
 techdoc-summary kafka
+techdoc-summary logstash
 ```
 
 Each command writes two files, one English report and one Korean report.
@@ -95,6 +97,12 @@ Generate an automatic Elasticsearch version impact report from official Elastic 
 
 ```bash
 techdoc-summary elasticsearch --from-version 9.0 --to-version 9.2 --output-dir reports
+```
+
+Generate an automatic Logstash version impact report from official Elastic documents:
+
+```bash
+techdoc-summary logstash --from-version 7.17 --to-version 8.13 --output-dir reports
 ```
 
 For version ranges, the tool fetches official release and upgrade documents,
@@ -113,8 +121,10 @@ cd <project-root>
 PYTHONPATH=src python3 -m techdoc_summary.cli all
 PYTHONPATH=src python3 -m techdoc_summary.cli elasticsearch
 PYTHONPATH=src python3 -m techdoc_summary.cli kafka
+PYTHONPATH=src python3 -m techdoc_summary.cli logstash
 PYTHONPATH=src python3 -m techdoc_summary.cli kafka --from-version 3.7 --to-version 3.9 --output-dir reports
 PYTHONPATH=src python3 -m techdoc_summary.cli elasticsearch --from-version 9.0 --to-version 9.2 --output-dir reports
+PYTHONPATH=src python3 -m techdoc_summary.cli logstash --from-version 7.17 --to-version 8.13 --output-dir reports
 ```
 
 Write to a custom output directory:

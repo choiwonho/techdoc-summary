@@ -93,7 +93,7 @@ def test_run_all_writes_reports_for_every_registered_source(tmp_path: Path):
     paths = run("all", output_dir=tmp_path)
 
     names = [path.name for path in paths]
-    assert len(names) == 4
+    assert len(names) == 6
     assert names[0].startswith("elasticsearch-")
     assert names[0].endswith(".en.md")
     assert names[1].startswith("elasticsearch-")
@@ -102,6 +102,10 @@ def test_run_all_writes_reports_for_every_registered_source(tmp_path: Path):
     assert names[2].endswith(".en.md")
     assert names[3].startswith("kafka-")
     assert names[3].endswith(".ko.md")
+    assert names[4].startswith("logstash-")
+    assert names[4].endswith(".en.md")
+    assert names[5].startswith("logstash-")
+    assert names[5].endswith(".ko.md")
 
 
 def test_main_rejects_unknown_source(capsys):
@@ -112,6 +116,7 @@ def test_main_rejects_unknown_source(capsys):
     assert "Unknown source 'docker'" in captured.err
     assert "elasticsearch" in captured.err
     assert "kafka" in captured.err
+    assert "logstash" in captured.err
 
 
 def test_main_accepts_output_dir(tmp_path: Path, capsys):
@@ -132,10 +137,13 @@ def test_main_accepts_all_source(tmp_path: Path, capsys):
     assert "Wrote reports:" in captured.out
     assert "elasticsearch-" in captured.out
     assert "kafka-" in captured.out
+    assert "logstash-" in captured.out
     assert list(tmp_path.glob("elasticsearch-*.en.md"))
     assert list(tmp_path.glob("elasticsearch-*.ko.md"))
     assert list(tmp_path.glob("kafka-*.en.md"))
     assert list(tmp_path.glob("kafka-*.ko.md"))
+    assert list(tmp_path.glob("logstash-*.en.md"))
+    assert list(tmp_path.glob("logstash-*.ko.md"))
 
 
 def test_kafka_command_accepts_version_range(tmp_path: Path, capsys, monkeypatch):
@@ -256,6 +264,35 @@ def test_elasticsearch_command_accepts_version_range(tmp_path: Path, capsys, mon
     assert "## 결론" in markdown
     assert "## 반드시 확인할 것" in markdown
     assert "| 항목 | 변경 내용 | 영향 | 해야 할 일 |" in markdown
+
+
+def test_logstash_command_accepts_version_range(tmp_path: Path, capsys, monkeypatch):
+    install_fake_version_report(
+        monkeypatch,
+        expected_source_id="logstash",
+        display_name="Logstash",
+    )
+    exit_code = main(
+        [
+            "logstash",
+            "--from-version",
+            "7.17",
+            "--to-version",
+            "8.13",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "Wrote reports:" in captured.out
+    korean_report = tmp_path / "logstash-7.17-to-8.13-2026-07-19.ko.md"
+    assert korean_report.exists()
+    markdown = korean_report.read_text(encoding="utf-8")
+    assert markdown.startswith("# Logstash 7.17 -> 8.13 업그레이드 영향 리포트")
+    assert "## 결론" in markdown
+    assert "## 반드시 확인할 것" in markdown
 
 
 def test_kafka_command_rejects_partial_version_range(tmp_path: Path, capsys):

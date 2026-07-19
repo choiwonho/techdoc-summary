@@ -4,10 +4,11 @@ from techdoc_summary.models import SourceDocument
 from techdoc_summary.sources import UnknownSourceError, available_sources, get_adapter
 from techdoc_summary.sources.elasticsearch import ElasticsearchAdapter, _version_range as elastic_version_range
 from techdoc_summary.sources.kafka import KafkaAdapter
+from techdoc_summary.sources.logstash import LogstashAdapter, _version_range as logstash_version_range
 
 
 def test_registry_exposes_mvp_sources():
-    assert available_sources() == ["elasticsearch", "kafka"]
+    assert available_sources() == ["elasticsearch", "kafka", "logstash"]
 
 
 def test_get_adapter_returns_elasticsearch_adapter_documents():
@@ -176,6 +177,65 @@ def test_get_adapter_returns_kafka_adapter_documents():
     assert adapter.source_id == "kafka"
     assert adapter.display_name == "Kafka"
     assert all(document.url.startswith("https://") for document in documents)
+
+
+def test_get_adapter_returns_logstash_adapter_documents():
+    adapter = get_adapter("logstash")
+    documents = adapter.fetch()
+
+    assert adapter.source_id == "logstash"
+    assert adapter.display_name == "Logstash"
+    assert all(isinstance(document, SourceDocument) for document in documents)
+    assert {document.section for document in documents} >= {
+        "current-version",
+        "release-notes",
+        "breaking-changes",
+        "configuration",
+        "bug-fixes",
+    }
+
+
+def test_logstash_version_range_crosses_7_to_8_boundary():
+    versions = logstash_version_range("7.17", "8.13")
+
+    assert versions[0] == "7.17"
+    assert versions[1] == "8.0"
+    assert versions[-1] == "8.13"
+    assert len(versions) == 15
+
+
+def test_logstash_adapter_fetches_major_boundary_documents():
+    fetched_urls: list[str] = []
+
+    def fake_fetch(url: str) -> str:
+        fetched_urls.append(url)
+        return f"""
+        <html>
+          <main>
+            <h1>{url}</h1>
+            <p>Logstash upgrade material added Java and ECS compatibility notes.</p>
+          </main>
+        </html>
+        """
+
+    adapter = LogstashAdapter(fetcher=fake_fetch)
+
+    documents = adapter.fetch_version_diff("7.17", "8.13")
+
+    assert [document.title for document in documents[:3]] == [
+        "Logstash 7.17.0 release notes",
+        "Logstash 8.0.0 release notes",
+        "Logstash 8.13.0 release notes",
+    ]
+    assert fetched_urls[:3] == [
+        "https://www.elastic.co/guide/en/logstash/7.17/logstash-7-17-0.html",
+        "https://www.elastic.co/guide/en/logstash/8.19/logstash-8-0-0.html",
+        "https://www.elastic.co/guide/en/logstash/8.13/logstash-8-13-0.html",
+    ]
+    assert "https://www.elastic.co/guide/en/logstash/8.13/upgrading-logstash.html" in fetched_urls
+    assert any(document.title == "Logstash upgrade documentation" for document in documents)
+    assert any(document.title == "Logstash 8.0 breaking changes" for document in documents)
+    assert all(document.section == "source-material" for document in documents)
 
 
 def test_kafka_adapter_returns_version_diff_documents_for_3_8_to_4_1():

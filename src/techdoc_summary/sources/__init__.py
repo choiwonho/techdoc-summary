@@ -3,6 +3,7 @@ from __future__ import annotations
 from techdoc_summary.sources.base import BaseSourceAdapter
 from techdoc_summary.sources.elasticsearch import ElasticsearchAdapter
 from techdoc_summary.sources.kafka import KafkaAdapter
+from techdoc_summary.sources.logstash import LogstashAdapter
 
 
 class UnknownSourceError(ValueError):
@@ -17,6 +18,7 @@ class UnknownSourceError(ValueError):
 _ADAPTERS: dict[str, type[BaseSourceAdapter]] = {
     ElasticsearchAdapter.source_id: ElasticsearchAdapter,
     KafkaAdapter.source_id: KafkaAdapter,
+    LogstashAdapter.source_id: LogstashAdapter,
 }
 
 
