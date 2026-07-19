@@ -85,6 +85,21 @@ techdoc-summary kafka
 Each command writes two files, one English report and one Korean report.
 `all` runs every registered adapter.
 
+Generate an automatic Kafka version impact report from official Kafka documents:
+
+```bash
+techdoc-summary kafka --from-version 3.7 --to-version 3.9 --output-dir reports
+```
+
+For version ranges, the tool fetches official Kafka release and upgrade documents,
+extracts high-signal change sentences locally, and writes a report focused on:
+
+- what changed
+- operational impact
+- actions to take
+- configuration checklist
+- source links
+
 Run without installing the CLI command:
 
 ```bash
@@ -92,6 +107,7 @@ cd <project-root>
 PYTHONPATH=src python3 -m techdoc_summary.cli all
 PYTHONPATH=src python3 -m techdoc_summary.cli elasticsearch
 PYTHONPATH=src python3 -m techdoc_summary.cli kafka
+PYTHONPATH=src python3 -m techdoc_summary.cli kafka --from-version 3.7 --to-version 3.9 --output-dir reports
 ```
 
 Write to a custom output directory:

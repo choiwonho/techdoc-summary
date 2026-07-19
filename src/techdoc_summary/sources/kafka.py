@@ -1,12 +1,47 @@
 from __future__ import annotations
 
+import re
+from html import unescape
+from collections.abc import Callable
+
 from techdoc_summary.models import SourceDocument
 from techdoc_summary.sources.base import BaseSourceAdapter
+from techdoc_summary.sources.http import fetch_text
+
+
+KAFKA_RELEASE_ANNOUNCEMENTS = {
+    "3.7": (
+        "Kafka 3.7.0 release announcement",
+        "https://kafka.apache.org/blog/2024/02/27/apache-kafka-3.7.0-release-announcement/",
+    ),
+    "3.8": (
+        "Kafka 3.8.0 release announcement",
+        "https://kafka.apache.org/blog/2024/07/29/apache-kafka-3.8.0-release-announcement/",
+    ),
+    "3.9": (
+        "Kafka 3.9.0 release announcement",
+        "https://kafka.apache.org/blog/2024/11/06/apache-kafka-3.9.0-release-announcement/",
+    ),
+    "4.0": (
+        "Kafka 4.0.0 release announcement",
+        "https://kafka.apache.org/blog/2025/03/18/apache-kafka-4.0.0-release-announcement/",
+    ),
+    "4.1": (
+        "Kafka 4.1.0 release announcement",
+        "https://kafka.apache.org/blog/2025/09/04/apache-kafka-4.1.0-release-announcement/",
+    ),
+}
+
+KAFKA_BLOG_INDEX_URL = "https://kafka.apache.org/blog/"
 
 
 class KafkaAdapter(BaseSourceAdapter):
     source_id = "kafka"
     display_name = "Kafka"
+
+    def __init__(self, fetcher: Callable[[str], str] = fetch_text) -> None:
+        self._fetcher = fetcher
+        self._release_index: dict[str, tuple[str, str]] | None = None
 
     def fetch(self) -> list[SourceDocument]:
         return [
@@ -55,81 +90,97 @@ class KafkaAdapter(BaseSourceAdapter):
         ]
 
     def fetch_version_diff(self, from_version: str, to_version: str) -> list[SourceDocument]:
-        if (from_version, to_version) != ("3.8", "4.1"):
-            return [
-                SourceDocument(
-                    title=f"Kafka {from_version} to {to_version} comparison",
-                    url="https://kafka.apache.org/documentation/#upgrade",
-                    section="current-version",
-                    content=(
-                        f"No curated Kafka comparison findings are available for "
-                        f"{from_version} -> {to_version}. Review the official upgrade "
-                        "notes and release notes before planning the upgrade."
-                    ),
-                )
+        versions = _version_range(from_version, to_version)
+        documents = []
+        for version in versions:
+            release = self._release_announcement_for(version)
+            if release is None:
+                continue
+            title, url = release
+            documents.append(_source_document(title, url, self._fetcher(url)))
+        documents.extend(
+            [
+                _source_document(
+                    "Kafka upgrade documentation",
+                    "https://kafka.apache.org/documentation/#upgrade",
+                    self._fetcher("https://kafka.apache.org/documentation/#upgrade"),
+                ),
+                _source_document(
+                    "Kafka compatibility documentation",
+                    "https://kafka.apache.org/40/getting-started/compatibility/",
+                    self._fetcher("https://kafka.apache.org/40/getting-started/compatibility/"),
+                ),
             ]
+        )
+        return documents
 
-        return [
-            SourceDocument(
-                title="Kafka 3.8 to 4.1 upgrade posture",
-                url="https://kafka.apache.org/documentation/#upgrade",
-                section="current-version",
-                content=(
-                    "Kafka 3.8에서 4.1로 이동할 때 핵심 변화는 4.0 경계입니다. "
-                    "Kafka 4.x는 ZooKeeper 모드를 지원하지 않고 KRaft 모드가 필수입니다. "
-                    "현재 클러스터가 ZooKeeper 기반이면 4.1 업그레이드 전에 KRaft 마이그레이션을 "
-                    "먼저 끝내야 하며, 3.8에서 바로 4.1 바이너리만 교체하는 방식으로 접근하면 안 됩니다."
-                ),
-            ),
-            SourceDocument(
-                title="Kafka 4.x major changes",
-                url="https://kafka.apache.org/downloads",
-                section="release-notes",
-                content=(
-                    "4.0에서 오래된 protocol API 버전과 deprecated API가 제거됐습니다. "
-                    "Java client, Kafka Streams, Connect는 2.1 이상이어야 4.0 브로커와의 "
-                    "호환성을 기대할 수 있고, 사내 wrapper나 비공식 Kafka client도 KIP-896 "
-                    "영향을 따로 확인해야 합니다. 4.1에서는 Queues for Kafka(KIP-932)가 preview로 "
-                    "추가되고 Streams rebalance protocol(KIP-1071)이 early access로 들어왔지만, "
-                    "둘 다 운영 기본 기능으로 바로 켜기보다 별도 검증 대상으로 보는 편이 안전합니다."
-                ),
-            ),
-            SourceDocument(
-                title="Kafka 4.x upgrade cautions",
-                url="https://kafka.apache.org/documentation/#upgrade",
-                section="breaking-changes",
-                content=(
-                    "SASL/OAUTHBEARER를 쓰는 경우 보안 callback handler 참조를 확인해야 합니다. "
-                    "org.apache.kafka.common.security.oauthbearer.secured 패키지의 "
-                    "OAuthBearerLoginCallbackHandler와 OAuthBearerValidatorCallbackHandler는 제거됐고, "
-                    "secured가 빠진 org.apache.kafka.common.security.oauthbearer 패키지의 클래스를 "
-                    "사용해야 합니다. 또한 Kafka 4.0부터 sasl.oauthbearer token/JWKS endpoint를 "
-                    "허용하려면 org.apache.kafka.sasl.oauthbearer.allowed.urls 시스템 속성 검토가 필요합니다."
-                ),
-            ),
-            SourceDocument(
-                title="Kafka configuration review",
-                url="https://kafka.apache.org/documentation/#configuration",
-                section="configuration",
-                content=(
-                    "server.properties와 client 설정에서 제거 또는 기본값 변경 항목을 점검해야 합니다. "
-                    "log.message.format.version과 message.format.version은 제거됐고, "
-                    "delegation.token.master.key는 delegation.token.secret.key로 바꿔야 합니다. "
-                    "producer 기본 linger.ms는 0에서 5로 변경됐으며, enable.idempotence는 "
-                    "max.in.flight.requests.per.connection 값이 5를 초과해도 예전처럼 자동 fallback하지 않습니다. "
-                    "4.1에서는 log.cleaner.enable이 deprecated 됐고 false 설정을 더 이상 유지하지 않는 방향으로 준비해야 합니다."
-                ),
-            ),
-            SourceDocument(
-                title="Kafka fixes and improvements",
-                url="https://kafka.apache.org/downloads",
-                section="bug-fixes",
-                content=(
-                    "런타임 요구사항도 같이 올라갑니다. Kafka 4.0부터 client와 Kafka Streams "
-                    "애플리케이션의 최소 Java 버전은 Java 11이고, broker, Connect, tools는 Java 17이 필요합니다. "
-                    "4.1.1에는 Kafka Streams의 메모리 누수와 데이터 손실 관련 중요 수정이 포함됐고, "
-                    "4.1.2에는 producer record가 잘못된 topic으로 갈 수 있는 드문 버그 수정이 포함됐습니다. "
-                    "따라서 4.1 계열을 쓸 때는 가능하면 최신 4.1.x 패치 버전까지 함께 검토하는 것이 좋습니다."
-                ),
-            ),
-        ]
+    def _release_announcement_for(self, version: str) -> tuple[str, str] | None:
+        if version in KAFKA_RELEASE_ANNOUNCEMENTS:
+            return KAFKA_RELEASE_ANNOUNCEMENTS[version]
+        if self._release_index is None:
+            self._release_index = _parse_release_index(self._fetcher(KAFKA_BLOG_INDEX_URL))
+        return self._release_index.get(version)
+
+
+def _version_range(from_version: str, to_version: str) -> list[str]:
+    start_major, start_minor = _parse_version(from_version)
+    end_major, end_minor = _parse_version(to_version)
+    if (start_major, start_minor) > (end_major, end_minor):
+        raise ValueError("from-version must be less than or equal to to-version")
+
+    versions: list[str] = []
+    major = start_major
+    minor = start_minor
+    while (major, minor) <= (end_major, end_minor):
+        versions.append(f"{major}.{minor}")
+        minor += 1
+        if major == 3 and minor > 9:
+            major = 4
+            minor = 0
+    return versions
+
+
+def _parse_version(version: str) -> tuple[int, int]:
+    match = re.fullmatch(r"(\d+)\.(\d+)", version)
+    if not match:
+        raise ValueError(f"Unsupported Kafka version format: {version}")
+    return int(match.group(1)), int(match.group(2))
+
+
+def _source_document(title: str, url: str, html: str) -> SourceDocument:
+    return SourceDocument(
+        title=title,
+        url=url,
+        section="source-material",
+        content=_html_to_text(html),
+    )
+
+
+def _parse_release_index(html: str) -> dict[str, tuple[str, str]]:
+    releases: dict[str, tuple[str, str]] = {}
+    for href, version, minor_version in re.findall(
+        r'href=["\']?([^"\' >]*apache-kafka-((\d+\.\d+)\.\d+)-release-announcement/?)',
+        html,
+        flags=re.IGNORECASE,
+    ):
+        if minor_version in releases:
+            continue
+        url = _absolute_kafka_url(href)
+        releases[minor_version] = (f"Kafka {version} release announcement", url)
+    return releases
+
+
+def _absolute_kafka_url(href: str) -> str:
+    if href.startswith("https://"):
+        return href
+    if href.startswith("/"):
+        return f"https://kafka.apache.org{href}"
+    return f"https://kafka.apache.org/blog/{href}"
+
+
+def _html_to_text(html: str) -> str:
+    text = re.sub(r"<(script|style).*?</\1>", " ", html, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = unescape(text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()

@@ -1,6 +1,75 @@
 from pathlib import Path
 
 from techdoc_summary.cli import main, run
+from techdoc_summary.models import SourceDocument, SummaryReport, SummarySection
+
+
+class FakeKafkaAdapter:
+    source_id = "kafka"
+    display_name = "Kafka"
+
+    def fetch_version_diff(self, from_version: str, to_version: str) -> list[SourceDocument]:
+        return [
+            SourceDocument(
+                title=f"Kafka {from_version} to {to_version}",
+                url="https://kafka.apache.org/documentation/#upgrade",
+                section="source-material",
+                content=f"Official Kafka source material for {from_version} -> {to_version}",
+            )
+        ]
+
+
+def install_fake_version_report(monkeypatch):
+    def fake_get_adapter(source_id: str):
+        assert source_id == "kafka"
+        return FakeKafkaAdapter()
+
+    def fake_generate_version_diff_report(
+        source_id: str,
+        display_name: str,
+        from_version: str,
+        to_version: str,
+        documents: list[SourceDocument],
+    ) -> SummaryReport:
+        assert documents[0].section == "source-material"
+        return SummaryReport(
+            source_id=source_id,
+            display_name=display_name,
+            generated_on=__import__("datetime").date(2026, 7, 19),
+            sections=[
+                SummarySection(
+                    title="Conclusion",
+                    body=f"- Kafka {from_version}에서 {to_version} 자동 분석 결과입니다.",
+                ),
+                SummarySection(
+                    title="Must Check",
+                    body=(
+                        "| 항목 | 변경 내용 | 영향 | 해야 할 일 |\n"
+                        "|---|---|---|---|\n"
+                        "| KRaft 전환 | ZooKeeper 관련 변경 | 운영 영향 | migration 확인 |\n"
+                        "| ZooKeeper 종료 준비 | 3.x 라인의 마지막 major release | 4.0 준비 필요 | Dynamic KRaft Quorum과 tasks.max 확인 |\n"
+                    ),
+                ),
+                SummarySection(
+                    title="Configuration Checklist",
+                    body="- OAuthBearer 확인\n- tasks.max 확인",
+                ),
+                SummarySection(
+                    title="Release Highlights",
+                    body="- Dynamic KRaft Quorum\n- 3.x 라인의 마지막 major release",
+                ),
+            ],
+            source_links=[documents[0].url],
+            title_en=f"Kafka {from_version} -> {to_version} Upgrade Impact Report",
+            title_ko=f"Kafka {from_version} -> {to_version} 업그레이드 영향 리포트",
+            file_label=f"kafka-{from_version}-to-{to_version}",
+        )
+
+    monkeypatch.setattr("techdoc_summary.cli.get_adapter", fake_get_adapter)
+    monkeypatch.setattr(
+        "techdoc_summary.cli.generate_version_diff_report",
+        fake_generate_version_diff_report,
+    )
 
 
 def test_run_writes_report(tmp_path: Path):
@@ -63,7 +132,8 @@ def test_main_accepts_all_source(tmp_path: Path, capsys):
     assert list(tmp_path.glob("kafka-*.ko.md"))
 
 
-def test_kafka_command_accepts_version_range(tmp_path: Path, capsys):
+def test_kafka_command_accepts_version_range(tmp_path: Path, capsys, monkeypatch):
+    install_fake_version_report(monkeypatch)
     exit_code = main(
         [
             "kafka",
@@ -79,12 +149,77 @@ def test_kafka_command_accepts_version_range(tmp_path: Path, capsys):
     captured = capsys.readouterr()
     assert exit_code == 0
     assert "Wrote reports:" in captured.out
-    korean_reports = list(tmp_path.glob("kafka-*.ko.md"))
+    korean_reports = list(tmp_path.glob("kafka-3.8-to-4.1-*.ko.md"))
     assert len(korean_reports) == 1
     markdown = korean_reports[0].read_text(encoding="utf-8")
+    assert markdown.startswith("# Kafka 3.8 -> 4.1 업그레이드 영향 리포트")
+    assert "## 결론" in markdown
+    assert "## 반드시 확인할 것" in markdown
+    assert "| 항목 | 변경 내용 | 영향 | 해야 할 일 |" in markdown
+    assert "| KRaft 전환 |" in markdown
+    assert "## 설정 변경 체크리스트" in markdown
     assert "Kafka 3.8에서 4.1" in markdown
     assert "ZooKeeper" in markdown
-    assert "deprecated" in markdown
+    assert "OAuthBearer" in markdown
+
+
+def test_kafka_version_range_report_does_not_overwrite_generic_report(
+    tmp_path: Path, monkeypatch
+):
+    generic_paths = run("kafka", output_dir=tmp_path)
+    install_fake_version_report(monkeypatch)
+    exit_code = main(
+        [
+            "kafka",
+            "--from-version",
+            "3.8",
+            "--to-version",
+            "4.1",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    assert exit_code == 0
+    assert {path.name for path in generic_paths} == {
+        "kafka-2026-07-19.en.md",
+        "kafka-2026-07-19.ko.md",
+    }
+    assert (tmp_path / "kafka-2026-07-19.ko.md").exists()
+    assert (tmp_path / "kafka-3.8-to-4.1-2026-07-19.ko.md").exists()
+    generic_markdown = (tmp_path / "kafka-2026-07-19.ko.md").read_text(encoding="utf-8")
+    diff_markdown = (tmp_path / "kafka-3.8-to-4.1-2026-07-19.ko.md").read_text(
+        encoding="utf-8"
+    )
+    assert generic_markdown.startswith("# Kafka 요약")
+    assert diff_markdown.startswith("# Kafka 3.8 -> 4.1 업그레이드 영향 리포트")
+
+
+def test_kafka_command_accepts_3_7_to_3_9_version_range(tmp_path: Path, capsys, monkeypatch):
+    install_fake_version_report(monkeypatch)
+    exit_code = main(
+        [
+            "kafka",
+            "--from-version",
+            "3.7",
+            "--to-version",
+            "3.9",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "Wrote reports:" in captured.out
+    korean_report = tmp_path / "kafka-3.7-to-3.9-2026-07-19.ko.md"
+    assert korean_report.exists()
+    markdown = korean_report.read_text(encoding="utf-8")
+    assert markdown.startswith("# Kafka 3.7 -> 3.9 업그레이드 영향 리포트")
+    assert "| ZooKeeper 종료 준비 |" in markdown
+    assert "3.x 라인의 마지막 major release" in markdown
+    assert "Dynamic KRaft Quorum" in markdown
+    assert "tasks.max" in markdown
 
 
 def test_kafka_command_rejects_partial_version_range(tmp_path: Path, capsys):

@@ -13,6 +13,10 @@ SECTION_TITLE_TRANSLATIONS = {
     "Breaking Changes": "호환성 깨짐 변경 사항",
     "Configuration Notes": "설정 참고 사항",
     "Bug Fixes": "버그 수정",
+    "Conclusion": "결론",
+    "Must Check": "반드시 확인할 것",
+    "Configuration Checklist": "설정 변경 체크리스트",
+    "Release Highlights": "릴리즈별 주요 포인트",
 }
 
 BODY_TRANSLATIONS = {
@@ -78,8 +82,9 @@ def render_markdown(report: SummaryReport, language: str = "en") -> str:
     _validate_language(language)
     title_suffix = "Summary" if language == "en" else "요약"
     generated_label = "Generated on" if language == "en" else "생성일"
+    title = _report_title(report, language, title_suffix)
     lines = [
-        f"# {report.display_name} {title_suffix}",
+        f"# {title}",
         "",
         f"{generated_label}: {report.generated_on.isoformat()}",
         "",
@@ -87,7 +92,8 @@ def render_markdown(report: SummaryReport, language: str = "en") -> str:
 
     for section in report.sections:
         section_title = _translate_section_title(section.title, language)
-        section_body = _translate_body(section.body.strip(), language)
+        body = section.body_ko if language == "ko" and section.body_ko is not None else section.body
+        section_body = _translate_body(body.strip(), language)
         lines.extend([f"## {section_title}", "", section_body, ""])
 
     source_links_title = "Source Links" if language == "en" else "출처 링크"
@@ -109,7 +115,8 @@ def render_markdown(report: SummaryReport, language: str = "en") -> str:
 def write_report(report: SummaryReport, output_dir: Path, language: str = "en") -> Path:
     _validate_language(language)
     output_dir.mkdir(parents=True, exist_ok=True)
-    path = output_dir / f"{report.source_id}-{report.generated_on.isoformat()}.{language}.md"
+    file_label = report.file_label or report.source_id
+    path = output_dir / f"{file_label}-{report.generated_on.isoformat()}.{language}.md"
     path.write_text(render_markdown(report, language=language), encoding="utf-8")
     return path
 
@@ -129,6 +136,14 @@ def _translate_section_title(title: str, language: str) -> str:
     if language == "en":
         return title
     return SECTION_TITLE_TRANSLATIONS.get(title, title)
+
+
+def _report_title(report: SummaryReport, language: str, title_suffix: str) -> str:
+    if language == "en" and report.title_en:
+        return report.title_en
+    if language == "ko" and report.title_ko:
+        return report.title_ko
+    return f"{report.display_name} {title_suffix}"
 
 
 def _translate_body(body: str, language: str) -> str:

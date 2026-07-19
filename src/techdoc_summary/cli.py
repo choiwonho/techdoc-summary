@@ -7,7 +7,9 @@ from typing import Optional
 
 from techdoc_summary.renderer import write_reports
 from techdoc_summary.sources import UnknownSourceError, available_sources, get_adapter
+from techdoc_summary.sources.http import DocumentFetchError
 from techdoc_summary.summarizer import summarize
+from techdoc_summary.version_reporter import generate_version_diff_report
 
 
 def run(source_id: str, output_dir: Optional[Path] = None) -> list[Path]:
@@ -38,13 +40,20 @@ def _run_one(
     adapter = get_adapter(source_id)
     if from_version and to_version and hasattr(adapter, "fetch_version_diff"):
         documents = adapter.fetch_version_diff(from_version, to_version)
+        report = generate_version_diff_report(
+            source_id=adapter.source_id,
+            display_name=adapter.display_name,
+            from_version=from_version,
+            to_version=to_version,
+            documents=documents,
+        )
     else:
         documents = adapter.fetch()
-    report = summarize(
-        source_id=adapter.source_id,
-        display_name=adapter.display_name,
-        documents=documents,
-    )
+        report = summarize(
+            source_id=adapter.source_id,
+            display_name=adapter.display_name,
+            documents=documents,
+        )
     return write_reports(report, output_dir or Path("reports"))
 
 
@@ -95,6 +104,9 @@ def main(argv: Optional[list[str]] = None) -> int:
         else:
             paths = run(args.source, args.output_dir)
     except UnknownSourceError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    except (DocumentFetchError, ValueError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
 
