@@ -57,9 +57,13 @@ RISK_KEYWORDS = (
 
 NOISE_PHRASES = (
     "get started introduction quickstart",
+    "get started free",
     "books and papers videos podcasts",
     "powered by apache",
     "apache software foundation",
+    "all rights reserved",
+    "trademarks",
+    "loading elastic docs",
     "express our gratitude",
     "say thank you",
     "was the backbone",
@@ -69,6 +73,10 @@ NOISE_PHRASES = (
     "we are excited",
     "see the upgrading to",
     "see the release notes for details",
+    "to learn how to upgrade",
+    "before you upgrade, carefully review",
+    "review the deprecated functionality",
+    "while deprecations have no immediate impact",
 )
 
 
@@ -240,7 +248,7 @@ def _config_section(findings: list[dict[str, str]]) -> SummarySection:
 
 
 def _release_highlights_section(findings: list[dict[str, str]]) -> SummarySection:
-    selected = findings[:8]
+    selected = _balanced_findings(findings, limit=8)
     body = "\n".join(
         f"- {finding['source']}: {finding['sentence']}" for finding in selected
     )
@@ -252,6 +260,26 @@ def _release_highlights_section(findings: list[dict[str, str]]) -> SummarySectio
         body=body or "- No release highlight sentence was extracted.",
         body_ko=body_ko or "- 릴리즈 주요 문장을 추출하지 못했습니다.",
     )
+
+
+def _balanced_findings(findings: list[dict[str, str]], limit: int) -> list[dict[str, str]]:
+    selected: list[dict[str, str]] = []
+    seen_sources: set[str] = set()
+    for finding in findings:
+        if finding["source"] in seen_sources:
+            continue
+        selected.append(finding)
+        seen_sources.add(finding["source"])
+        if len(selected) >= limit:
+            return selected
+
+    for finding in findings:
+        if finding in selected:
+            continue
+        selected.append(finding)
+        if len(selected) >= limit:
+            return selected
+    return selected
 
 
 def _risk_findings(findings: list[dict[str, str]]) -> list[dict[str, str]]:

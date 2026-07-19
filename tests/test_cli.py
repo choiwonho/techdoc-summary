@@ -4,25 +4,31 @@ from techdoc_summary.cli import main, run
 from techdoc_summary.models import SourceDocument, SummaryReport, SummarySection
 
 
-class FakeKafkaAdapter:
-    source_id = "kafka"
-    display_name = "Kafka"
+class FakeVersionAdapter:
+    def __init__(self, source_id: str, display_name: str) -> None:
+        self.source_id = source_id
+        self.display_name = display_name
 
     def fetch_version_diff(self, from_version: str, to_version: str) -> list[SourceDocument]:
         return [
             SourceDocument(
-                title=f"Kafka {from_version} to {to_version}",
-                url="https://kafka.apache.org/documentation/#upgrade",
+                title=f"{self.display_name} {from_version} to {to_version}",
+                url=f"https://example.com/{self.source_id}/upgrade",
                 section="source-material",
-                content=f"Official Kafka source material for {from_version} -> {to_version}",
+                content=(
+                    f"Official {self.display_name} source material for "
+                    f"{from_version} -> {to_version}"
+                ),
             )
         ]
 
 
-def install_fake_version_report(monkeypatch):
+def install_fake_version_report(
+    monkeypatch, expected_source_id: str = "kafka", display_name: str = "Kafka"
+):
     def fake_get_adapter(source_id: str):
-        assert source_id == "kafka"
-        return FakeKafkaAdapter()
+        assert source_id == expected_source_id
+        return FakeVersionAdapter(expected_source_id, display_name)
 
     def fake_generate_version_diff_report(
         source_id: str,
@@ -39,7 +45,7 @@ def install_fake_version_report(monkeypatch):
             sections=[
                 SummarySection(
                     title="Conclusion",
-                    body=f"- Kafka {from_version}에서 {to_version} 자동 분석 결과입니다.",
+                    body=f"- {display_name} {from_version}에서 {to_version} 자동 분석 결과입니다.",
                 ),
                 SummarySection(
                     title="Must Check",
@@ -60,9 +66,9 @@ def install_fake_version_report(monkeypatch):
                 ),
             ],
             source_links=[documents[0].url],
-            title_en=f"Kafka {from_version} -> {to_version} Upgrade Impact Report",
-            title_ko=f"Kafka {from_version} -> {to_version} 업그레이드 영향 리포트",
-            file_label=f"kafka-{from_version}-to-{to_version}",
+            title_en=f"{display_name} {from_version} -> {to_version} Upgrade Impact Report",
+            title_ko=f"{display_name} {from_version} -> {to_version} 업그레이드 영향 리포트",
+            file_label=f"{expected_source_id}-{from_version}-to-{to_version}",
         )
 
     monkeypatch.setattr("techdoc_summary.cli.get_adapter", fake_get_adapter)
@@ -220,6 +226,36 @@ def test_kafka_command_accepts_3_7_to_3_9_version_range(tmp_path: Path, capsys, 
     assert "3.x 라인의 마지막 major release" in markdown
     assert "Dynamic KRaft Quorum" in markdown
     assert "tasks.max" in markdown
+
+
+def test_elasticsearch_command_accepts_version_range(tmp_path: Path, capsys, monkeypatch):
+    install_fake_version_report(
+        monkeypatch,
+        expected_source_id="elasticsearch",
+        display_name="Elasticsearch",
+    )
+    exit_code = main(
+        [
+            "elasticsearch",
+            "--from-version",
+            "9.0",
+            "--to-version",
+            "9.2",
+            "--output-dir",
+            str(tmp_path),
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "Wrote reports:" in captured.out
+    korean_report = tmp_path / "elasticsearch-9.0-to-9.2-2026-07-19.ko.md"
+    assert korean_report.exists()
+    markdown = korean_report.read_text(encoding="utf-8")
+    assert markdown.startswith("# Elasticsearch 9.0 -> 9.2 업그레이드 영향 리포트")
+    assert "## 결론" in markdown
+    assert "## 반드시 확인할 것" in markdown
+    assert "| 항목 | 변경 내용 | 영향 | 해야 할 일 |" in markdown
 
 
 def test_kafka_command_rejects_partial_version_range(tmp_path: Path, capsys):

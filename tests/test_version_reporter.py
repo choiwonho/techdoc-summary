@@ -69,3 +69,53 @@ def test_generate_version_diff_report_filters_navigation_and_promo_noise():
     assert "Get Started Introduction Quickstart" not in combined
     assert "express our gratitude" not in combined
     assert "operate entirely without Apache ZooKeeper" in combined
+
+
+def test_release_highlights_include_each_official_source():
+    documents = [
+        SourceDocument(
+            title="Elastic Stack 7.17 release announcement",
+            url="https://www.elastic.co/blog/whats-new-elastic-7-17-0",
+            section="source-material",
+            content=(
+                "Elastic 7.17 added Upgrade Assistant improvements for 8.0 upgrades. "
+                "Elastic 7.17 introduced deprecated API checks for application migration. "
+                "Elastic 7.17 added remediation guidance for deprecated settings. "
+                "Elastic 7.17 introduced Docker image compatibility changes."
+            ),
+        ),
+        SourceDocument(
+            title="Elastic 8.0 release announcement",
+            url="https://www.elastic.co/blog/whats-new-elastic-8-0-0",
+            section="source-material",
+            content=(
+                "Elastic 8.0 introduced native NLP support and streamlined security. "
+                "Elastic 8.0 added vector search and ANN search capabilities. "
+                "Elastic 8.0 introduced simplified data onboarding. "
+                "Elastic 8.0 added faster relevance improvements."
+            ),
+        ),
+        SourceDocument(
+            title="Elastic Search 8.13 release announcement",
+            url="https://www.elastic.co/blog/whats-new-elastic-search-8-13-0",
+            section="source-material",
+            content=(
+                "Elasticsearch 8.13 added Lucene 9.10 and Learning to Rank as technical preview."
+            ),
+        ),
+    ]
+
+    report = generate_version_diff_report(
+        source_id="elasticsearch",
+        display_name="Elasticsearch",
+        from_version="7.17",
+        to_version="8.13",
+        documents=documents,
+    )
+
+    release_highlights = next(
+        section for section in report.sections if section.title == "Release Highlights"
+    )
+    assert "Upgrade Assistant" in release_highlights.body
+    assert "native NLP support" in release_highlights.body
+    assert "Learning to Rank" in release_highlights.body

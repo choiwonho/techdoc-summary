@@ -91,7 +91,13 @@ Generate an automatic Kafka version impact report from official Kafka documents:
 techdoc-summary kafka --from-version 3.7 --to-version 3.9 --output-dir reports
 ```
 
-For version ranges, the tool fetches official Kafka release and upgrade documents,
+Generate an automatic Elasticsearch version impact report from official Elastic documents:
+
+```bash
+techdoc-summary elasticsearch --from-version 9.0 --to-version 9.2 --output-dir reports
+```
+
+For version ranges, the tool fetches official release and upgrade documents,
 extracts high-signal change sentences locally, and writes a report focused on:
 
 - what changed
@@ -108,6 +114,7 @@ PYTHONPATH=src python3 -m techdoc_summary.cli all
 PYTHONPATH=src python3 -m techdoc_summary.cli elasticsearch
 PYTHONPATH=src python3 -m techdoc_summary.cli kafka
 PYTHONPATH=src python3 -m techdoc_summary.cli kafka --from-version 3.7 --to-version 3.9 --output-dir reports
+PYTHONPATH=src python3 -m techdoc_summary.cli elasticsearch --from-version 9.0 --to-version 9.2 --output-dir reports
 ```
 
 Write to a custom output directory:
